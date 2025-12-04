@@ -597,50 +597,64 @@ bool Tester::peLaunchesKernel() {
   return is_launcher;
 }
 
+
 void Tester::print(uint64_t size) {
   if (args.myid != 0 || !_print_results) {
     return;
   }
 
-  /**
-   * Calculate total amount of data transfered
-   */
   uint64_t total_size = size * num_timed_msgs;
-  double timer_avg = timerAvgInMicroseconds();
 
-  double time_us = gpuCyclesToMicroseconds(max_end_time - min_start_time);
-  double time_s = time_us / 1e6;
-
-  double latency_avg = time_us / num_timed_msgs;
-
-  double avg_msg_rate = num_timed_msgs / time_s;
-
-  double bandwidth_avg_gbs =
-      static_cast<double>(total_size * bw_factor) / time_s / pow(2, 30);
-
-  float total_kern_time_ms;
+  float total_kern_time_ms = 0.0f;
   CHECK_HIP(hipEventElapsedTime(&total_kern_time_ms, start_event, stop_event));
-  float total_kern_time_s = total_kern_time_ms / 1000;
+
+  double full_time_s  = static_cast<double>(total_kern_time_ms) / 1000.0;
+  double full_time_us = static_cast<double>(total_kern_time_ms) * 1000.0;
+
+  double full_latency_us   = full_time_us / num_timed_msgs;
+  double full_msg_rate     = num_timed_msgs / full_time_s;
+  double full_bw_gbs =
+      static_cast<double>(total_size * bw_factor) / full_time_s / pow(2, 30);
+
+  double inner_avg_us = timerAvgInMicroseconds();
+
+  double inner_total_us = gpuCyclesToMicroseconds(max_end_time - min_start_time);
+  double inner_total_s  = inner_total_us / 1e6;
+
+  double inner_latency_us = inner_total_us / num_timed_msgs;
+  double inner_msg_rate   = num_timed_msgs / inner_total_s;
+  double inner_bw_gbs =
+      static_cast<double>(total_size * bw_factor) / inner_total_s / pow(2, 30);
 
   int field_width = 20;
   int float_precision = 2;
 
   if (_print_header) {
-    printf("%-*s%-*s%*s%*s%*s",
+    printf("%-*s%-*s"
+           "%*s%*s%*s"      // Full: latency, bw, msg rate
+           "%*s%*s%*s\n",   // Inner: latency, bw, msg rate
            15, "# Size (B)",
            15, "# of timed Msgs",
-           field_width, "Latency (us)",
-           field_width, "Bandwidth (GB/s)",
-           field_width + 1, "Msg Rate (Msg/s)\n");
+           field_width,        "Full Latency (us)",
+           field_width,        "Full Bandwidth (GB/s)",
+           field_width + 1,    "Full Msg Rate (Msg/s)",
+           field_width,        "Inner Latency (us)",
+           field_width,        "Inner Bandwidth (GB/s)",
+           field_width + 1,    "Inner Msg Rate (Msg/s)");
     _print_header = 0;
   }
 
-  printf("%-*lu%-*d%*.*f%*.*f%*.*f\n",
+  printf("%-*lu%-*d"
+         "%*.*f%*.*f%*.*f"
+         "%*.*f%*.*f%*.*f\n",
          15, size,
          15, num_timed_msgs,
-         field_width, float_precision, latency_avg,
-         field_width, float_precision, bandwidth_avg_gbs,
-         field_width, float_precision, avg_msg_rate);
+         field_width,     float_precision, full_latency_us,
+         field_width,     float_precision, full_bw_gbs,
+         field_width + 1, float_precision, full_msg_rate,
+         field_width,     float_precision, inner_latency_us,
+         field_width,     float_precision, inner_bw_gbs,
+         field_width + 1, float_precision, inner_msg_rate);
 
   fflush(stdout);
 }
