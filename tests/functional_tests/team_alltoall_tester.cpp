@@ -73,21 +73,14 @@ __global__ void TeamAlltoallTest(int loop, int skip, long long int *start_time,
 
   __syncthreads();
 
-  for (int i = 0; i < loop + skip; i++) {
-    if (i == skip && hipThreadIdx_x == 0) {
-      start_time[wg_id] = wall_clock64();
-    }
+  // no warmup here anymore
+  for (int i = 0; i < loop; i++) {
     wg_team_alltoall<T1>(ctx, teams[wg_id],
                     dest_buf,               // T* dest
                     source_buf,             // const T* source
                     num_elems);             // int nelement
   }
 
-  __syncthreads();
-
-  if (hipThreadIdx_x == 0) {
-    end_time[wg_id] = wall_clock64();
-  }
 
   rocshmem_wg_ctx_destroy(&ctx);
 }

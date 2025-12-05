@@ -57,6 +57,9 @@
 #include "wavefront_primitives.hpp"
 #include "workgroup_primitives.hpp"
 
+#include <chrono>
+#include <cmath>
+
 #include "backend_bc.hpp"
 extern Backend* backend;
 
@@ -506,12 +509,19 @@ void Tester::execute() {
 
   int num_loops = args.loop;
 
+  // host side timer
+  using clock_t = std::chrono::high_resolution_clock;
+  std::chrono::time_point<clock_t> cpu_start;
+  std::chrono::duration<double>    cpu_delta{0.0};
+  double cpu_delta_usec = 0.0;
+
   /**
    * Some tests loop through data sizes in powers of 2 and report the
    * results for those ranges.
    */
   for (size_t size = args.min_msg_size; size <= args.max_msg_size;
        size <<= 1) {
+
     resetBuffers(size);
 
     /**
@@ -533,21 +543,39 @@ void Tester::execute() {
      * rocshmem pes.
      */
     if (peLaunchesKernel()) {
-      memset(timer, 0, sizeof(uint64_t) * args.num_wgs);
-
       const dim3 blockSize(args.wg_size, 1, 1);
       const dim3 gridSize(args.num_wgs, 1, 1);
 
-      CHECK_HIP(hipEventRecord(start_event, stream));
+    if (args.skip > 0) {
+      int warmup_loops = args.skip;
+      int num_warmup_launches = 10;
 
+      for (int w = 0; w < num_warmup_launches; ++w) {
+        launchKernel(gridSize, blockSize, warmup_loops, size);
+        hipError_t werr = hipStreamSynchronize(stream);
+        if (werr != hipSuccess) {
+          printf("warmup error = %d\n", werr);
+          break;
+        }
+      }
+    }
+
+      // --- start host timer ---
+      cpu_start = clock_t::now();
+
+      // no HIP events / device timers any more
       launchKernel(gridSize, blockSize, num_loops, size);
-
-      CHECK_HIP(hipEventRecord(stop_event, stream));
 
       hipError_t err = hipStreamSynchronize(stream);
       if (err != hipSuccess) {
         printf("error = %d \n", err);
       }
+
+      // --- stop host timer ---
+      cpu_delta = clock_t::now() - cpu_start;
+      cpu_delta_usec =
+          std::chrono::duration_cast<std::chrono::duration<double>>(cpu_delta)
+              .count() * 1e6; // seconds -> usec
     }
 
     barrier();
@@ -559,14 +587,37 @@ void Tester::execute() {
 
     barrier();
 
+    // original GPU-side print() is not needed any more
     if (_type != TeamCtxInfraTestType       &&
         _type != TeamCtxInfraTestSingleType &&
         _type != TeamCtxInfraTestBlockType  &&
         _type != TeamCtxInfraTestOddEvenType ) {
-      print(size);
+
+      if (args.myid == 0) {
+        // num_timed_msgs and bw_factor are already set in launchKernel()
+        uint64_t total_size   = size * num_timed_msgs;
+        double   host_time_us = cpu_delta_usec;
+        double   host_time_s  = host_time_us / 1e6;
+
+        double host_latency  = host_time_us / num_timed_msgs;   // usec / msg
+        double host_msg_rate = num_timed_msgs / host_time_s;    // msgs / s
+        double host_bw_gbs   =
+            static_cast<double>(total_size * bw_factor) / host_time_s /
+            std::pow(2.0, 30.0);
+
+        printf("# Host Timing: size(B)=%lu  total_time(us)=%10.5f"
+               "  latency(us)=%10.5f  bandwidth(GB/s)=%10.5f"
+               "  msg_rate(msg/s)=%10.5f\n",
+               static_cast<unsigned long>(size),
+               host_time_us,
+               host_latency,
+               host_bw_gbs,
+               host_msg_rate);
+      }
     }
   }
 }
+
 
 bool Tester::peLaunchesKernel() {
   bool is_launcher;
