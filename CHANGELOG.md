@@ -6,6 +6,7 @@
 * Added new APIs:
    * `rocshmem_ctx_pe_quiet`
    * `rocshmem_pe_quiet`
+   * `rocshmem_TYPENAME_alltoall_wg`
 
 ## rocSHMEM 3.1.0 for ROCm 7.1.1
 ### Added
