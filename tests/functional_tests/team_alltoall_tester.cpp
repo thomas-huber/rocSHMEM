@@ -67,6 +67,7 @@ __global__ void TeamAlltoallTest(int loop, int skip, long long int *start_time,
   rocshmem_wg_team_create_ctx(teams[wg_id], ctx_type, &ctx);
 
   int n_pes = rocshmem_ctx_n_pes(ctx);
+  //int n_pes = rocshmem_ctx_n_pes(); 
 
   source_buf += wg_id * n_pes * num_elems;
   dest_buf += wg_id * n_pes * num_elems;
@@ -74,14 +75,12 @@ __global__ void TeamAlltoallTest(int loop, int skip, long long int *start_time,
   __syncthreads();
 
   // no warmup here anymore
-  for (int i = 0; i < loop; i++) {
-    wg_team_alltoall<T1>(ctx, teams[wg_id],
-                    dest_buf,               // T* dest
-                    source_buf,             // const T* source
-                    num_elems);             // int nelement
-  }
-
-
+  //for (int i = 0; i < loop; i++) {
+  wg_team_alltoall<T1>(ctx, teams[wg_id],
+                    dest_buf,     
+                    source_buf,  
+                    num_elems); 
+  
   rocshmem_wg_ctx_destroy(&ctx);
 }
 

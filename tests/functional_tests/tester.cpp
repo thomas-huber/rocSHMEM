@@ -552,28 +552,32 @@ void Tester::execute() {
 
       for (int w = 0; w < num_warmup_launches; ++w) {
         launchKernel(gridSize, blockSize, warmup_loops, size);
-        hipError_t werr = hipStreamSynchronize(stream);
-        if (werr != hipSuccess) {
+      }
+      hipError_t werr = hipStreamSynchronize(stream);
+      if (werr != hipSuccess) {
           printf("warmup error = %d\n", werr);
           break;
-        }
       }
+
     }
 
+    //barrier();
       // --- start host timer ---
-      cpu_start = clock_t::now();
+    cpu_start = clock_t::now();
 
       // no HIP events / device timers any more
-      launchKernel(gridSize, blockSize, num_loops, size);
+    for (int w = 0; w < num_loops; ++w) {
+    	launchKernel(gridSize, blockSize, num_loops, size);
+    }
 
-      hipError_t err = hipStreamSynchronize(stream);
-      if (err != hipSuccess) {
+    hipError_t err = hipStreamSynchronize(stream);
+    if (err != hipSuccess) {
         printf("error = %d \n", err);
-      }
+    }
 
-      // --- stop host timer ---
-      cpu_delta = clock_t::now() - cpu_start;
-      cpu_delta_usec =
+    // --- stop host timer ---
+    cpu_delta = clock_t::now() - cpu_start;
+    cpu_delta_usec =
           std::chrono::duration_cast<std::chrono::duration<double>>(cpu_delta)
               .count() * 1e6; // seconds -> usec
     }
@@ -598,6 +602,7 @@ void Tester::execute() {
         uint64_t total_size   = size * num_timed_msgs;
         double   host_time_us = cpu_delta_usec;
         double   host_time_s  = host_time_us / 1e6;
+	double host_time_per_iter = host_time_us/num_loops;
 
         double host_latency  = host_time_us / num_timed_msgs;   // usec / msg
         double host_msg_rate = num_timed_msgs / host_time_s;    // msgs / s
@@ -605,12 +610,13 @@ void Tester::execute() {
             static_cast<double>(total_size * bw_factor) / host_time_s /
             std::pow(2.0, 30.0);
 
+	//printf("size(B) = %lu, time (us)= %10.5f",  static_cast<unsigned long>(size), host_time_us);
         printf("# Host Timing: size(B)=%lu  total_time(us)=%10.5f"
                "  latency(us)=%10.5f  bandwidth(GB/s)=%10.5f"
                "  msg_rate(msg/s)=%10.5f\n",
                static_cast<unsigned long>(size),
                host_time_us,
-               host_latency,
+               host_time_per_iter,
                host_bw_gbs,
                host_msg_rate);
       }
