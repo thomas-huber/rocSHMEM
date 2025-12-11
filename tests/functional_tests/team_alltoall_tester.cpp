@@ -24,7 +24,7 @@
 
 /* Declare the template with a generic implementation */
 template <typename T>
-__device__ void wg_team_alltoall(rocshmem_ctx_t ctx, rocshmem_team_t team,
+__device__ void wg_team_alltoall(rocshmem_team_t team,
                                  T *dest, const T *source, int nelem) {
   return;
 }
@@ -32,9 +32,9 @@ __device__ void wg_team_alltoall(rocshmem_ctx_t ctx, rocshmem_team_t team,
 /* Define templates to call rocSHMEM */
 #define TEAM_ALLTOALL_DEF_GEN(T, TNAME)                                        \
   template <>                                                                  \
-  __device__ void wg_team_alltoall<T>(rocshmem_ctx_t ctx, rocshmem_team_t team,\
+  __device__ void wg_team_alltoall<T>( rocshmem_team_t team,\
                                  T * dest, const T *source, int nelem) {       \
-    rocshmem_ctx_##TNAME##_alltoall_wg(ctx, team, dest, source, nelem);        \
+    rocshmem_##TNAME##_alltoall_wg(team, dest, source, nelem);        \
   }
 
 TEAM_ALLTOALL_DEF_GEN(float, float)
@@ -61,13 +61,11 @@ __global__ void TeamAlltoallTest(int loop, int skip, long long int *start_time,
                                  T1 *dest_buf, int num_elems,
                                  ShmemContextType ctx_type,
                                  rocshmem_team_t *teams) {
-  __shared__ rocshmem_ctx_t ctx;
   int wg_id = get_flat_grid_id();
 
-  rocshmem_wg_team_create_ctx(teams[wg_id], ctx_type, &ctx);
 
-  int n_pes = rocshmem_ctx_n_pes(ctx);
-  //int n_pes = rocshmem_ctx_n_pes(); 
+
+  int n_pes = rocshmem_n_pes(); 
 
   source_buf += wg_id * n_pes * num_elems;
   dest_buf += wg_id * n_pes * num_elems;
@@ -76,12 +74,11 @@ __global__ void TeamAlltoallTest(int loop, int skip, long long int *start_time,
 
   // no warmup here anymore
   //for (int i = 0; i < loop; i++) {
-  wg_team_alltoall<T1>(ctx, teams[wg_id],
+  wg_team_alltoall<T1>(teams[wg_id],
                     dest_buf,     
                     source_buf,  
                     num_elems); 
   
-  rocshmem_wg_ctx_destroy(&ctx);
 }
 
 /******************************************************************************

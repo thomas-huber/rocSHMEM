@@ -670,7 +670,7 @@ __global__ ATTR_NO_INLINE void rocshmem_alltoallmem_kernel(rocshmem_team_t team,
 
   // Call device alltoall function with created context and provided team
   // Using char type since size is in bytes (1 byte per element)
-  rocshmem_alltoall_wg<char>(ctx, team, (char *) dest,
+  rocshmem_ctx_alltoall_wg<char>(ctx, team, (char *) dest,
                              (const char *) source, (int) size);
 
   if (ctx_result == 0) {
